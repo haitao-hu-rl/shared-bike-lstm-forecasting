@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>共享单车调度预测 · 最终评估报告</title>
+<style>
+  body{font-family:"Microsoft YaHei","PingFang SC",sans-serif;max-width:900px;margin:0 auto;padding:32px 24px;color:#222;line-height:1.7;background:#fff;}
+  h1{font-size:24px;border-bottom:2px solid #185FA5;padding-bottom:10px;}
+  h2{font-size:18px;color:#185FA5;margin-top:32px;}
+  h3{font-size:15px;margin-top:20px;}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13px;}
+  th{background:#E6F1FB;text-align:left;padding:8px 10px;border:1px solid #d0ddee;}
+  td{padding:7px 10px;border:1px solid #e2e8f0;}
+  .good{color:#0F6E56;font-weight:600;}
+  .bad{color:#A32D2D;font-weight:600;}
+  .warn{color:#854F0B;font-weight:600;}
+  .box{background:#F5F8FC;border-left:4px solid #185FA5;padding:12px 16px;margin:14px 0;border-radius:4px;}
+  .meta{color:#666;font-size:12px;}
+  li{margin:4px 0;}
+</style>
+</head>
+<body>
+
+<h1>共享单车调度预测 · 最终评估报告</h1>
+<p class="meta">数据：65,535 条骑行订单（2020-07-01 ~ 09-23，85 天，122 站）｜评估口径：时间顺序切分 + 滚动 5 折交叉验证</p>
+
+<h2>一、任务回顾</h2>
+<p>原始数据零值率高达 84%（站点-小时），直接建模不可行。本次会话系统探索了三种聚合路径：<b>空间聚合（片区-小时）</b>、<b>时间聚合（站点-日）</b>、<b>站点×调度窗（3h）</b>，并验证了切分方式、片区编码、层次结构等 6 组对照实验。</p>
+
+<h2>二、表现最佳的模型：片区级借还双通道 LSTM</h2>
+<div class="box">
+<b>配置</b>：KMeans 聚类 6 片区 → 借出/归还双通道（24h 输入窗 → 未来 3h 直接多输出）→ one-hot 片区编码（6 维）→ LSTM(48,32) + Huber 损失 → 逐小时锚点、三次重叠预测取平均 → 合成"未来 3 小时累计净流"调度表。
+</div>
+
+<h3>核心片区 0+4 池化指标（n=600）</h3>
+<table>
+<tr><th>任务 / 口径</th><th>MAE（辆）</th><th>RMSE</th><th>R²</th><th>对照基线</th></tr>
+<tr><td><b>逐小时净流 · 三次重叠平均（最优）</b></td><td class="good">2.06</td><td class="good">2.78</td><td class="good">+0.32</td><td>persistence 2.99 / −0.50</td></tr>
+<tr><td>借出 dep · 合并</td><td>3.33</td><td>4.51</td><td class="good">+0.76</td><td>—</td></tr>
+<tr><td>归还 arr · 合并</td><td>3.18</td><td>4.25</td><td class="good">+0.78</td><td>—</td></tr>
+<tr><td>3h 累计净流 · LSTM</td><td>3.59</td><td>4.83</td><td>+0.45</td><td>persistence 6.97 / <span class="bad">−0.89</span> ※</td></tr>
+<tr><td><b>3h 净流方向准确率（白天 06–19）</b></td><td colspan="3" class="good">73.3%（单次 65.8%，persistence ≈55%）</td><td>—</td></tr>
+</table>
+<p style="font-size:12.5px;color:#6b7280;margin-top:-6px;">※ 已修正：原 persistence 的 3h 基线误用了 T−1~T+1（其中 T、T+1 属于未来），R² 虚高为 +0.53；改为 T−3~T−1 后为 −0.89。LSTM 侧数字不变。详见 overlap_bias_exp.csv。</p>
+
+<h3>稳健性：滚动 5 折交叉验证（覆盖 08-12 ~ 09-22）</h3>
+<table>
+<tr><th>指标</th><th>5 折 mean ± std</th><th>单次切分对照</th></tr>
+<tr><td>净流 MAE</td><td>2.25 ± 0.11</td><td>2.18</td></tr>
+<tr><td>净流 R²</td><td>0.15 ± 0.08</td><td>0.23</td></tr>
+<tr><td>dep / arr R²</td><td>0.85 ± 0.06 / 0.86 ± 0.05</td><td>0.85 / 0.86</td></tr>
+<tr><td>3h 累计 R²</td><td>0.33 ± 0.11</td><td>0.44</td></tr>
+<tr><td>persistence 净流 MAE / R²</td><td class="bad">3.55 / −1.23（每折皆负）</td><td>2.99 / −0.50</td></tr>
+</table>
+<p>5 折之间无崩坏段，单次切分结果落在 1 个标准差内 → <b>结论稳健，LSTM 对 persistence 的优势在每一折都成立</b>。</p>
+
+<h2>三、站点级能力边界（本次会话新探索）</h2>
+<table>
+<tr><th>粒度 / 方法</th><th>覆盖</th><th>净流 R²</th><th>方向准确率</th><th>结论</th></tr>
+<tr><td><b>A 档：top10 站 × 3h 调度窗（LSTM）</b></td><td>26% 流量</td><td class="good">0.39~0.42</td><td class="good">69~71%</td><td>可用，与片区级持平</td></tr>
+<tr><td>B 档：其余 112 站（片区预测 × 静态份额）</td><td>74% 流量</td><td>0.26 (top15)</td><td>~63%</td><td>免训练，仅作参考排序</td></tr>
+<tr><td>站点-日模型（夜间补车）</td><td>top30 站</td><td class="good">0.41~0.48</td><td>61%</td><td>可用于次日补车计划</td></tr>
+<tr><td>片区特征 / 学习式份额（层次模型）</td><td>—</td><td>无提升甚至更差</td><td>—</td><td><span class="bad">已排除</span></td></tr>
+</table>
+<p>实测样例：站 3005 连续 10 天早高峰预警"净流出 5.5–6.4 辆"，实际 2–12 辆，<b>10 条预警命中 9 条（90%）</b>。</p>
+
+<h2>四、是否足以支撑调度参考？</h2>
+
+<h3>✅ 足以支撑（建议立即试点）</h3>
+<ul>
+<li><b>片区级"哪边缺车"雷达</b>：提前 3 小时、方向 10 次对 7 次、误差约 3~4 辆（不到半辆调度车运力）。片区 0/4 镜像相关 −0.97，一次跨区调拨同时解决两端。</li>
+<li><b>预警阈值 5~8 辆</b>：高于此阈值的调度事件基本都能提前指出；A 档强信号预警命中率 90%。</li>
+<li><b>早高峰最可靠</b>（方向 59%~73%），午间最弱（48%）；夜间 20–23 时 &lt;55%，看板已标"?"。</li>
+<li><b>四班调度节奏</b>：02–05 夜间归集（站点-日模型）→ 06:00 早高峰布车 → 09:30–10:30 镜像反向搬运 → 16:00 晚高峰前布车。</li>
+</ul>
+
+<h3>❌ 尚不足以支撑</h3>
+<ul>
+<li><b>自动派车</b>：约 27% 方向错误 + 数量误差 ±3~4 辆，必须有调度员确认。</li>
+<li><b>精确数量预报</b>：逐小时净流 R² 仅 0.15，小时级波动基本是噪声；只可信赖 3h 累计。</li>
+<li><b>尾部 112 站的个体预警</b>：每窗约 1 单，任何模型都只能到 50–60%（信息密度上限，非模型问题）。</li>
+<li><b>片区 1</b>：存在数据漂移（8 月几乎无骑行、9 月骤增），须重聚类或在线更新后再上线。</li>
+</ul>
+
+<h2>五、部署蓝图与遗留事项</h2>
+<table>
+<tr><th>层</th><th>对象</th><th>方法</th><th>精度</th><th>维护</th></tr>
+<tr><td>片区层（主）</td><td>6 片区</td><td>双通道 LSTM + 重叠平均</td><td class="good">73%（白天）</td><td>已交付 lstm_dispatch_baseline.py + dispatch_alert.csv</td></tr>
+<tr><td>A 档</td><td>top10 站</td><td>站点×3h 窗 LSTM</td><td class="good">~70%</td><td>station_interval_exp.py</td></tr>
+<tr><td>B 档</td><td>其余 112 站</td><td>片区预测 × 静态份额表</td><td>~63%</td><td>仅更新份额表，零训练</td></tr>
+<tr><td>夜间</td><td>top30 站</td><td>站点-日模型</td><td>61%</td><td>station_day_exp.py</td></tr>
+</table>
+
+<p><b>遗留事项</b>：① 片区 1 漂移待处理；② 夜间时段不可用；③ 若未来能获得天气/节假日/桩位容量数据，是突破尾部站准确率的唯一现实路径；④ 上线建议先以"优先级清单"形式试用 2–4 周，用调度员实际反馈校准阈值。</p>
+
+<p class="meta">实验脚本：D:\Codes\Bike\report_build\（split_mode_exp / rolling_split_exp / enc_dim_exp / cluster_id_exp / station_day_exp / station_interval_exp / hierarchical_exp / share_decomp_exp / static_share_exp）；主模型：D:\Codes\Bike\lstm_dispatch_baseline.py</p>
+
+</body>
+</html>
