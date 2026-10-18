@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>P0 模型的输入与输出规格</title>
+<style>
+:root{--ink:#151a23;--mut:#6f7887;--line:#e6e8ee;--bg:#f7f8fa;--card:#fff;
+--accent:#2563eb;--teal:#0d9488;--orange:#ea580c;--red:#dc2626;--soft:#f4f6f9}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+font-family:"Microsoft YaHei","PingFang SC","Hiragino Sans GB",system-ui,-apple-system,sans-serif;
+line-height:1.75;font-size:15px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1000px;margin:0 auto;padding:46px 28px 72px}
+.kicker{font-size:12.5px;letter-spacing:.14em;color:var(--accent);font-weight:700}
+h1{font-size:31px;line-height:1.35;margin:12px 0 14px;letter-spacing:-.4px;font-weight:800}
+.sub{color:var(--mut);font-size:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.chip{background:#fff;border:1px solid var(--line);color:#48505d;border-radius:999px;
+padding:4px 12px;font-size:12.5px;font-variant-numeric:tabular-nums}
+.chip b{color:var(--ink)}
+.lead{background:#fff;border:1px solid var(--line);border-left:3px solid var(--teal);
+border-radius:4px 14px 14px 4px;padding:20px 24px;margin:26px 0 8px;
+box-shadow:0 1px 2px rgba(20,25,35,.04);font-size:15px;color:#2a313d}
+.lead .lab{font-size:12px;font-weight:700;color:var(--teal);letter-spacing:.08em;margin-bottom:6px}
+.lead b{background:linear-gradient(transparent 62%,rgba(37,99,235,.16) 62%)}
+h2{font-size:20px;margin:46px 0 6px;font-weight:800;display:flex;align-items:baseline;gap:10px}
+h2 span.n{font-size:12.5px;color:#b3bac6;font-weight:700}
+h3{font-size:15.5px;margin:26px 0 8px;font-weight:700}
+p{margin:10px 0;color:#333b48}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;
+margin:16px 0;box-shadow:0 1px 2px rgba(20,25,35,.04)}
+table{width:100%;border-collapse:collapse;font-size:13.2px;margin:12px 0;font-variant-numeric:tabular-nums}
+th{text-align:left;font-weight:700;color:#3d4553;border-bottom:1.5px solid #d8dce4;
+padding:9px 9px;font-size:12.6px;background:#fbfcfd}
+td{padding:8px 9px;border-bottom:1px solid var(--line);vertical-align:top;color:#3a4250}
+tr:last-child td{border-bottom:none}
+td.num,th.num{text-align:right}
+code{background:#f0f2f6;border-radius:4px;padding:1px 5px;font-size:12.5px;
+font-family:"JetBrains Mono",Consolas,monospace;color:#2c3441}
+.fig-note{background:var(--soft);border-radius:8px;padding:11px 14px;font-size:13px;
+color:#4a5260;margin-top:10px}
+.formula{background:#f7f9fc;border:1px solid #e3e8f0;border-radius:10px;padding:14px 18px;
+font-family:"JetBrains Mono",Consolas,monospace;font-size:13px;color:#1f2937;line-height:2;overflow-x:auto}
+.formula b{color:var(--accent);font-family:inherit}
+.hl{background:#fff8ed;border:1px solid #fde3c2;border-radius:10px;padding:13px 16px;
+font-size:13.4px;color:#7a4a12;margin:12px 0}
+.hl b{color:#8a4b0a}
+ul,ol{margin:8px 0;padding-left:22px}
+li{margin:5px 0;color:#333b48}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:760px){.two{grid-template-columns:1fr}.wrap{padding:30px 16px 56px}h1{font-size:25px}}
+.mini{background:var(--soft);border-radius:10px;padding:13px 15px}
+.mini .t{font-size:11.5px;color:var(--mut);margin-bottom:3px;font-weight:700;letter-spacing:.03em}
+.mini .v{font-size:19px;font-weight:800;letter-spacing:-.4px}
+.mini .d{font-size:12.3px;color:#5a6270;margin-top:2px}
+.tag{display:inline-block;padding:1px 7px;border-radius:5px;font-size:11.5px;font-weight:700}
+.in{background:#eaf1ff;color:#1d4ed8}.out{background:#e6f6f3;color:#0b7f72}
+footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--line);
+color:var(--mut);font-size:12.5px}
+</style></head><body><div class="wrap">
+
+<div class="kicker">MODEL SPEC · P0 任务</div>
+<h1>输入是什么、输出是什么：<br>从 24 小时历史到「哪个站、几点、缺几辆」</h1>
+<div class="sub">借还双通道需求预测 → 未来 3 小时累计净流 → 站点级调度清单</div>
+<div class="chips">
+<span class="chip">输入 <b>(24, 7)</b> 浮点矩阵</span>
+<span class="chip">输出 <b>6</b> 个数</span>
+<span class="chip">中间量 <b>1</b> 个净流</span>
+<span class="chip">最终表 <b>__NST__</b> 行 × 12 列</span>
+</div>
+
+<div class="lead">
+<div class="lab">一句话概括</div>
+模型吃进去的是<b>一个片区过去 24 小时的借出量和归还量</b>（加上时间特征），吐出来的是<b>未来 3 小时每小时各借出多少、各归还多少</b>——一共 6 个数。
+这 6 个数相减得到净流，再按各站历史份额拆到站，才是调度员看的那张表。
+</div>
+
+<h2><span class="n">01</span>全景：四步数据流</h2>
+<figure>__FLOW__</figure>
+<div class="fig-note">粒度选择：模型在<b>片区</b>层训练（避免站点级 84% 的零值稀疏），但在<b>站点</b>层输出（调度按站派车）。中间用"历史份额"做桥——这是整条链路最关键的设计。</div>
+
+<h2><span class="n">02</span>输入 X：一个 (24, 7) 的矩阵</h2>
+<p>预测时点 <code>t</code>（例如 09-22 的 06:00）对应输入窗口 <code>[t−23, t]</code>，共 24 个时间步。每步 7 个通道，拼成 <code>(24, 7)</code>；批量训练时是 <code>(batch, 24, 7)</code>。</p>
+
+<div class="card">
+<table>
+<tr><th style="width:6%">#</th><th style="width:22%">通道</th><th class="num" style="width:11%">取值</th><th style="width:28%">来源</th><th>为什么需要它</th></tr>
+<tr><td>1</td><td><b>dep</b> 借出量</td><td class="num">0 – 1</td><td>该片区每小时借出单量 ÷ <code>scale</code>（本例 __SCALE__）</td><td>主序列之一，决定"车被骑走多少"</td></tr>
+<tr><td>2</td><td><b>arr</b> 归还量</td><td class="num">0 – 1</td><td>该片区每小时归还单量 ÷ <code>scale</code></td><td>主序列之二，决定"车被送回多少"</td></tr>
+<tr><td>3</td><td><b>hour_sin</b></td><td class="num">−1 – 1</td><td><code>sin(2π·hour/24)</code></td><td>日周期。ACF(lag=24)=0.857，是最强的信号</td></tr>
+<tr><td>4</td><td><b>hour_cos</b></td><td class="num">−1 – 1</td><td><code>cos(2π·hour/24)</code></td><td>与 sin 配对才能区分"上半天/下半天"</td></tr>
+<tr><td>5</td><td><b>dow_sin</b></td><td class="num">−1 – 1</td><td><code>sin(2π·weekday/7)</code></td><td>周内规律（工作日 vs 周末形态不同）</td></tr>
+<tr><td>6</td><td><b>dow_cos</b></td><td class="num">−1 – 1</td><td><code>cos(2π·weekday/7)</code></td><td>同上，成对使用</td></tr>
+<tr><td>7</td><td><b>is_weekend</b></td><td class="num">0 / 1</td><td>周六、周日为 1</td><td>让模型能学一个显式的周末跳变</td></tr>
+</table>
+
+<h3 style="margin-top:22px">真实窗口（24 步中的最后 12 步，片区 4，截至 09-22 06:00）</h3>
+<table>
+<tr><th style="width:24%">时间</th><th class="num">hour</th><th class="num">weekday</th><th class="num">dep 原始</th><th class="num">arr 原始</th><th class="num">dep 归一</th><th class="num">arr 归一</th></tr>
+__INROWS__
+</table>
+<p style="font-size:12.8px;color:#6f7887;margin-bottom:0">前 12 步（09-21 07:00–18:00）同理，正好覆盖前一天完整的早晚高峰——这是模型判断"今天该来几辆车"的主要依据。</p>
+</div>
+
+<div class="fig-note" style="margin-top:12px">
+<b>标准化：</b>连续通道做 <code>x′ = (x − μ) / σ</code>，<code>μ、σ</code> <b>只用训练段（前 70%）统计</b>，否则会用未来信息污染训练。本例 dep 的 μ≈0.241、σ≈0.185。时间特征本身已在 [−1,1]，无需再标准化。
+</div>
+
+<h2><span class="n">03</span>输出 Y：6 个数</h2>
+<p>模型直接输出 6 维向量，单位是<b>辆/小时</b>，已还原为原始量纲：</p>
+<div class="card">
+<table>
+<tr><th style="width:12%">维度</th><th style="width:14%">时刻</th><th style="width:20%">含义</th><th class="num" style="width:15%">模型预测</th><th class="num">当日实际</th></tr>
+__OUTROWS__
+</table>
+<p style="font-size:13px;color:#4a5260">前 3 维是借出、后 3 维是归还。表中"当日实际"仅用于验证——真实上线时这 6 个数就是模型能给的全部信息。</p>
+<p style="font-size:13px;color:#4a5260;margin-bottom:0"><b>为什么一次输出 3 步、而不是滚动预测 1 步？</b>递归式预测每步都要把上一步的输出喂回去，误差会逐步累积，且每步都要重算特征。直接多输出 3 步更稳、更快，且调度本来就是按"一趟 3 小时"排的。</p>
+</div>
+
+<h2><span class="n">04</span>合成：6 个数 → 1 个净流 → 一张站点表</h2>
+<div class="formula">
+<b>① 片区净流</b><br>
+net_3h = (12.83 + 22.14 + 20.19) − (8.01 + 17.88 + 17.13) = <b>__NET__</b> 辆　（实际 __ACTNET__）<br><br>
+<b>② 拆到站点</b>（i = 站点，h = 小时）<br>
+pred_net_i(h) = arr̂(h) · w_arr(i | c,h) − dep̂(h) · w_dep(i | c,h)<br>
+　w = 该站在「同片区 · 同类日 · 同时段」下占片区借出／归还量的历史份额<br><br>
+<b>③ 一致性校验</b>（可写成单元测试）<br>
+Σ_i pred_net_i(h) ≈ net_h　（份额和归一化后才严格成立）
+</div>
+<p style="font-size:13.2px;color:#4a5260">符号约定：<b>负数 = 净流出 = 需要补车</b>，<b>正数 = 净流入 = 需要清运</b>。一位调度员看到 <code>−4.56</code> 就该理解为"这三小时这个站会被骑走 4 辆半，得先送车过去"。</p>
+
+<h2><span class="n">05</span>最终表：调度员每天早上看的那张</h2>
+<div class="card">
+<table>
+<tr><th style="width:14%">字段</th><th style="width:24%">含义</th><th>示例 / 说明</th></tr>
+<tr><td><code>date</code></td><td>预测日期</td><td>2020-09-22</td></tr>
+<tr><td><code>station_id</code></td><td>站点 id</td><td>3042</td></tr>
+<tr><td><code>cluster</code></td><td>所属片区</td><td>0（用于同片区调拨配对）</td></tr>
+<tr><td><code>window</code></td><td>预测时段</td><td>07:00–10:00</td></tr>
+<tr><td><code>pred_net_h1/h2/h3</code></td><td><b>逐小时净流</b></td><td>−0.78 / −2.24 / −1.54　←「几点」由这三列回答</td></tr>
+<tr><td><code>pred_net_3h</code></td><td>3 小时累计净流</td><td>−4.56　←「缺多少」由这一列回答</td></tr>
+<tr><td><code>need_bikes</code></td><td>需调车辆数（取整）</td><td>5</td></tr>
+<tr><td><code>action</code></td><td>动作</td><td>补车 / 清运</td></tr>
+<tr><td><code>priority</code></td><td>优先级</td><td>紧急 / 高 / 中 / 低</td></tr>
+</table>
+
+<h3 style="margin-top:20px">实跑结果（9-22 早高峰，摘录）</h3>
+<table>
+<tr><th style="width:12%">日期</th><th style="width:10%">站点</th><th class="num" style="width:8%">片区</th><th style="width:15%">时段</th>
+<th class="num" style="width:9%">07 点</th><th class="num" style="width:9%">08 点</th><th class="num" style="width:9%">09 点</th>
+<th class="num" style="width:11%">3h 合计</th><th class="num" style="width:9%">需调</th><th>动作</th></tr>
+__TROWS__
+</table>
+<p style="font-size:12.8px;color:#6f7887;margin-bottom:0">读法：3042 站 08 点净流出 2.24 辆、是三个小时里最紧的一小时，所以补车要<b>在 08:00 之前</b>完成；3005 站相反，三小时持续积压，越早清运越好。</p>
+</div>
+
+<h2><span class="n">06</span>训练样本怎么造</h2>
+<div class="two">
+<div class="mini"><div class="t">样本数</div><div class="v">1,995 / 片区</div><div class="d">2,021 小时 − 24 窗口 − 3 预测步</div></div>
+<div class="mini"><div class="t">切分</div><div class="v">70 / 15 / 15</div><div class="d">严格按时间切，禁止 shuffle</div></div>
+<div class="mini"><div class="t">损失函数</div><div class="v">Huber(δ=1)</div><div class="d">调度损失是线性的，MSE 会被峰值主导</div></div>
+<div class="mini"><div class="t">早停</div><div class="v">patience 10</div><div class="d">保存验证集最优权重</div></div>
+</div>
+<div class="hl"><b>防泄漏三条硬约束：</b>① 预测 07–09 点，输入窗口必须截止在 06:00，一格都不能往后取；② 标准化统计量只来自训练段；③ 站点份额 <code>w</code> 只用训练期（前 70%）的行程统计，否则等于把答案提前告诉模型。</div>
+
+<h2><span class="n">07</span>三个必须说清的边界</h2>
+<h3>① 输出是"变化量"，不是"库存"</h3>
+<p>模型给的 <code>−4.56</code> 是"这三小时净流出 4.56 辆"，<b>不等于"该站只剩 −4.56 辆"</b>。要知道"几点会空"，还需要两个当前数据里没有的量：<b>起始库存</b>与<b>桩位容量</b>。
+一旦接入库存快照，把 <code>stock(t)</code> 作为第 8 个输入通道，目标就能从"净流"升级为"未来 3 小时库存曲线"，那才是严格意义上的缺车预警。</p>
+
+<h3>② 站点份额必须平滑</h3>
+<p>小站样本少，原始份额会剧烈抖动（某站一天只有 3 单，份额却算出 0.4）。建议用拉普拉斯平滑 <code>w = (n + 1) / (N + K)</code>，或对样本数 &lt; 30 的站点回退到片区均值，否则会出现"预测某小站要补 20 辆车"的荒谬结果。</p>
+
+<h3>③ 稀疏站点不要独立建模</h3>
+<p>日均出发不足 1 单的 13 个站，用份额法已经足够；它们既没有足够的样本训练模型，也不是调度的重点。资源的分配顺序应该是：<b>Top 25 站（覆盖 50% 流量）→ 片区 → 长尾站点用份额兜底</b>。</p>
+
+<h2><span class="n">08</span>可选增强通道（把 (24,7) 变成 (24,7+k)）</h2>
+<div class="card">
+<table>
+<tr><th style="width:24%">新增通道</th><th style="width:16%">数据来源</th><th>预期收益</th></tr>
+<tr><td>降水、气温</td><td>气象 API</td><td>单次用户（29%）对天气极敏感，雨天短时需求可掉 30%+</td></tr>
+<tr><td>节假日 / 调休标记</td><td>日历表</td><td>节假日形态接近周末但不完全一致，需显式标记</td></tr>
+<tr><td>前一周同日的 dep / arr</td><td>已有数据</td><td>周同比是强特征，能补足 24 小时窗口看不到的"上周今天"</td></tr>
+<tr><td>在途车辆数</td><td>用 <code>骑行时间</code> 分布卷积估算</td><td>把"正在骑向本站的车"纳入，库存推算更准</td></tr>
+<tr><td>当前库存 <code>stock(t)</code></td><td><b>需新增采集</b></td><td>最有价值的一个。有了它，输出可从"净流"变成"缺车概率"</td></tr>
+</table>
+</div>
+
+<footer>
+算例数据：<code>共享单车数据十万条1.xls</code>，片区 4，锚点 2020-09-22 06:00 ·
+模型：单层 LSTM(48)+LSTM(32)+Dense(6)，Huber 损失 ·
+复现：<code>D:\Codes\Bike\lstm_dispatch_baseline.py</code>（全流程）、<code>report_build\io_demo.py</code>（本页算例）
+</footer>
+</div></body></html>

@@ -1,0 +1,55 @@
+# -*- coding: utf-8 -*-
+import pandas as pd, numpy as np
+df = pd.read_excel('共享单车数据十万条1.xls')
+df['start']=pd.to_datetime(df['开始时间'],format='%m/%d/%Y %H:%M')
+df['end']=pd.to_datetime(df['结束时间'],format='%m/%d/%Y %H:%M')
+df['date']=df['start'].dt.date
+df['hour']=df['start'].dt.hour
+df['dow']=df['start'].dt.dayofweek
+print('=== 小时分布 ===')
+h=df.groupby('hour').size()
+print((h/h.sum()*100).round(1).to_string())
+print('\n=== 工作日 vs 周末 小时峰值 ===')
+wd=df[df['dow']<5].groupby('hour').size(); we=df[df['dow']>=5].groupby('hour').size()
+print('工作日 top5:', wd.nlargest(5).to_dict())
+print('周末   top5:', we.nlargest(5).to_dict())
+print('\n=== 站点流量 ===')
+dep=df.groupby('开始站点id').size().sort_values(ascending=False)
+arr=df.groupby('结束站点').size().sort_values(ascending=False)
+print('出发 top10:'); print(dep.head(10).to_string())
+print('到达 top10:'); print(arr.head(10).to_string())
+print('站点日均出发: min %d med %d max %d'%(dep.min(),dep.median(),dep.max()))
+print('极差比(max/min): %.1f'%(dep.max()/dep.min()))
+q=dep.rank(pct=True)
+print('前10%%站点承担出发量占比: %.1f%%'%(dep[dep.rank(pct=True)>0.9].sum()/dep.sum()*100))
+print('\n=== 站点净流量 (到达-出发) 全天 ===')
+net=(arr.reindex(dep.index.union(arr.index),fill_value=0)-dep.reindex(dep.index.union(arr.index),fill_value=0)).sort_values()
+print('最缺车(more departures):'); print(net.head(8).to_string())
+print('最积压(more arrivals):'); print(net.tail(8).to_string())
+print('\n=== 早晚高峰 站点级净流 (工作日) ===')
+w=df[df['dow']<5]
+for name,(a,b) in {'早高峰7-10':(7,10),'晚高峰17-20':(17,20)}.items():
+    s=w[(w['hour']>=a)&(w['hour']<b)]
+    d=s.groupby('开始站点id').size(); r=s.groupby('结束站点').size()
+    n=(r.reindex(d.index.union(r.index),fill_value=0)-d.reindex(d.index.union(d.index),fill_value=0))
+    print(name,'| 最缺车(top3):',n.nsmallest(3).to_dict(),'| 最积压(top3):',n.nlargest(3).to_dict())
+print('\n=== 时间序列自相关 (系统级小时单量) ===')
+ts=df.set_index('start').resample('h').size()
+print('小时序列长度:',len(ts),'零值小时:',(ts==0).sum())
+for lag in [1,2,3,24,48,168]:
+    print('lag %3d  acf=%.3f'%(lag, ts.autocorr(lag)))
+print('\n日序列:'); dts=df.groupby('date').size()
+for lag in [1,7]:
+    print('daily lag %d acf=%.3f'%(lag,dts.autocorr(lag)))
+print('\n=== 车辆链路一致性 ===')
+df=df.sort_values(['车辆id','start'])
+df['prev_end']=df.groupby('车辆id')['end'].shift()
+df['prev_endst']=df.groupby('车辆id')['结束站点'].shift()
+same=(df['prev_endst']==df['开始站点id'])
+print('有前序行程:',df['prev_endst'].notna().sum(),' 站点接续一致率: %.1f%%'%(same.sum()/df['prev_endst'].notna().sum()*100))
+print('平均接续间隔(min): %.1f'%((df['start']-df['prev_end']).dt.total_seconds().div(60).describe()['50%']))
+print('\n=== 单车日均周转 ===')
+tpb=df.groupby(['date','车辆id']).size()
+print(tpb.describe().round(2).to_string())
+print('\n=== 会员类型 x 时段 ===')
+print(pd.crosstab(df['会员类型'],df['hour']//3).to_string())
