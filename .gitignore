@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# 模型权重（可由脚本重新训练得到）
+*.h5
+*.keras
+
+# 编辑器
+.vscode/
+.idea/
+.DS_Store
+
+# 临时产物
+*.log
+logs/
